@@ -1,0 +1,45 @@
+# Production-ready docker-compose for Azure Container Instances
+version: '3.8'
+
+services:
+  eventmanagement-api:
+    image: ${AZURE_CONTAINER_REGISTRY}/eventmanagement-api:${IMAGE_TAG:-latest}
+    container_name: eventmanagement-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=${SQL_CONNECTION_STRING}
+      - ApplicationInsights__ConnectionString=${APPINSIGHTS_CONNECTION_STRING}
+    ports:
+      - "80:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Future services will be added here as we build them
+  # ticketinventory-api:
+  #   image: ${AZURE_CONTAINER_REGISTRY}/ticketinventory-api:${IMAGE_TAG:-latest}
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Production
+  #     - CosmosDB__ConnectionString=${COSMOS_CONNECTION_STRING}
+  #   ports:
+  #     - "81:8080"
+
+  # paymentprocessing-api:
+  #   image: ${AZURE_CONTAINER_REGISTRY}/paymentprocessing-api:${IMAGE_TAG:-latest}
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Production
+  #     - ConnectionStrings__DefaultConnection=${PAYMENT_SQL_CONNECTION_STRING}
+  #   ports:
+  #     - "82:8080"

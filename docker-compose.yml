@@ -1,0 +1,106 @@
+
+services:
+  # SQL Server Database
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ticketing-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "YourStrong!Passw0rd"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./infrastructure/sql/init:/docker-entrypoint-initdb.d
+    networks:
+      - ticketing-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q 'SELECT 1' -C || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  # EventManagement Service
+  eventmanagement-api:
+    build:
+      context: ./src/backend/EventManagement
+      dockerfile: Dockerfile
+    container_name: eventmanagement-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=EventManagementDB;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=true;Encrypt=false;
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
+      - ASPNETCORE_LOGGING__LOGLEVEL__MICROSOFT=Warning
+    ports:
+      - "8080:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - ticketing-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Future: TicketInventory Service (ready for when we build it)
+  # ticketinventory-api:
+  #   build:
+  #     context: ./src/backend/TicketInventory
+  #     dockerfile: Dockerfile
+  #   container_name: ticketinventory-api
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Development
+  #     - ASPNETCORE_URLS=http://+:8080
+  #     - CosmosDB__ConnectionString=${COSMOS_CONNECTION_STRING}
+  #   ports:
+  #     - "5002:8080"
+  #   networks:
+  #     - ticketing-network
+
+  # Future: PaymentProcessing Service
+  # paymentprocessing-api:
+  #   build:
+  #     context: ./src/backend/PaymentProcessing
+  #     dockerfile: Dockerfile
+  #   container_name: paymentprocessing-api
+  #   ports:
+  #     - "5003:8080"
+  #   networks:
+  #     - ticketing-network
+
+  # Future: NotificationService
+  # notificationservice-api:
+  #   build:
+  #     context: ./src/backend/NotificationService
+  #     dockerfile: Dockerfile
+  #   container_name: notificationservice-api
+  #   ports:
+  #     - "5004:8080"
+  #   networks:
+  #     - ticketing-network
+
+  # Future: API Gateway
+  # api-gateway:
+  #   build:
+  #     context: ./src/backend/APIGateway
+  #     dockerfile: Dockerfile
+  #   container_name: api-gateway
+  #   ports:
+  #     - "5000:8080"
+  #   networks:
+  #     - ticketing-network
+
+networks:
+  ticketing-network:
+    driver: bridge
+    name: ticketing-network
+
+volumes:
+  sqlserver_data:
+    driver: local

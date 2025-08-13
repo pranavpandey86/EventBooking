@@ -1,0 +1,87 @@
+# .gitignore for Ticket Booking System
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.pdb
+*.exe
+*.config
+*.csproj.user
+*.log
+*.vsidx
+*.vspscc
+.vs/
+.vscode/settings.json
+TestResults/
+packages/
+AppPackages/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+appsettings.Development.json
+appsettings.Production.json
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Database
+*.mdf
+*.ldf
+*.sdf
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Node.js (for frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Azure
+.azure/
+
+# Secrets
+secrets/
+*.pfx
+*.key
+*.crt
+
+# Build artifacts
+publish/
+*.nupkg
+*.snupkg
+
+# Test coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Temporary files
+*.tmp
+*.temp

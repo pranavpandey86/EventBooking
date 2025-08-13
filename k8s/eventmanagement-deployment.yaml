@@ -1,0 +1,117 @@
+# Kubernetes deployment for EventManagement Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventmanagement-api
+  namespace: ticketing-system
+  labels:
+    app: eventmanagement-api
+    version: v1
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: eventmanagement-api
+  template:
+    metadata:
+      labels:
+        app: eventmanagement-api
+        version: v1
+    spec:
+      containers:
+      - name: eventmanagement-api
+        image: ticketingacr.azurecr.io/eventmanagement-api:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ASPNETCORE_URLS
+          value: "http://+:8080"
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            secretKeyRef:
+              name: sql-connection
+              key: connectionstring
+        - name: ApplicationInsights__ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: appinsights-connection
+              key: connectionstring
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      imagePullSecrets:
+      - name: acr-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventmanagement-service
+  namespace: ticketing-system
+  labels:
+    app: eventmanagement-api
+spec:
+  selector:
+    app: eventmanagement-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eventmanagement-ingress
+  namespace: ticketing-system
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - api.ticketing.yourdomain.com
+    secretName: ticketing-tls
+  rules:
+  - host: api.ticketing.yourdomain.com
+    http:
+      paths:
+      - path: /api/v1/events
+        pathType: Prefix
+        backend:
+          service:
+            name: eventmanagement-service
+            port:
+              number: 80
