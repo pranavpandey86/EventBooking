@@ -1,6 +1,5 @@
 using EventManagement.API.DTOs;
-using EventManagement.Core.Entities;
-using EventManagement.Core.Interfaces;
+using EventManagement.API.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventManagement.API.Controllers
@@ -9,13 +8,13 @@ namespace EventManagement.API.Controllers
     [Route("api/v1/[controller]")]
     public class EventsController : ControllerBase
     {
-        private readonly IEventRepository _eventRepository;
+        private readonly IEventDtoService _eventDtoService;
         private readonly ILogger<EventsController> _logger;
 
-        public EventsController(IEventRepository eventRepository, ILogger<EventsController> logger)
+        public EventsController(IEventDtoService eventDtoService, ILogger<EventsController> logger)
         {
-            _eventRepository = eventRepository;
-            _logger = logger;
+            _eventDtoService = eventDtoService ?? throw new ArgumentNullException(nameof(eventDtoService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         [HttpGet]
@@ -23,9 +22,9 @@ namespace EventManagement.API.Controllers
         {
             try
             {
-                var events = await _eventRepository.GetAllEventsAsync();
-                var eventDtos = events.Select(MapToEventDto);
-                return Ok(eventDtos);
+                _logger.LogInformation("Getting all events");
+                var events = await _eventDtoService.GetAllEventsAsync();
+                return Ok(events);
             }
             catch (Exception ex)
             {
@@ -39,17 +38,19 @@ namespace EventManagement.API.Controllers
         {
             try
             {
-                var eventItem = await _eventRepository.GetEventByIdAsync(id);
-                if (eventItem == null)
+                _logger.LogInformation("Getting event with ID: {EventId}", id);
+                var eventDto = await _eventDtoService.GetEventByIdAsync(id);
+                
+                if (eventDto == null)
                 {
                     return NotFound($"Event with ID {id} not found");
                 }
 
-                return Ok(MapToEventDto(eventItem));
+                return Ok(eventDto);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving event {EventId}", id);
+                _logger.LogError(ex, "Error retrieving event with ID: {EventId}", id);
                 return StatusCode(500, "An error occurred while retrieving the event");
             }
         }
@@ -59,30 +60,25 @@ namespace EventManagement.API.Controllers
         {
             try
             {
-                var events = await _eventRepository.GetEventsByOrganizerAsync(organizerId);
-                var eventDtos = events.Select(MapToEventDto);
-                return Ok(eventDtos);
+                _logger.LogInformation("Getting events for organizer: {OrganizerId}", organizerId);
+                var events = await _eventDtoService.GetEventsByOrganizerAsync(organizerId);
+                return Ok(events);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving events for organizer {OrganizerId}", organizerId);
-                return StatusCode(500, "An error occurred while retrieving events");
+                _logger.LogError(ex, "Error retrieving events for organizer: {OrganizerId}", organizerId);
+                return StatusCode(500, "An error occurred while retrieving events for the organizer");
             }
         }
 
-        [HttpGet("search")]
-        public async Task<ActionResult<IEnumerable<EventDto>>> SearchEvents([FromQuery] EventSearchDto searchDto)
+        [HttpPost("search")]
+        public async Task<ActionResult<IEnumerable<EventDto>>> SearchEvents([FromBody] EventSearchDto? searchDto)
         {
             try
             {
-                var events = await _eventRepository.SearchEventsAsync(
-                    searchDto.SearchTerm,
-                    searchDto.Category,
-                    searchDto.StartDate,
-                    searchDto.EndDate);
-
-                var eventDtos = events.Select(MapToEventDto);
-                return Ok(eventDtos);
+                _logger.LogInformation("Searching events");
+                var events = await _eventDtoService.SearchEventsAsync(searchDto);
+                return Ok(events);
             }
             catch (Exception ex)
             {
@@ -101,11 +97,14 @@ namespace EventManagement.API.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var eventItem = MapToEvent(createEventDto);
-                var createdEvent = await _eventRepository.CreateEventAsync(eventItem);
-
-                var eventDto = MapToEventDto(createdEvent);
-                return CreatedAtAction(nameof(GetEvent), new { id = eventDto.EventId }, eventDto);
+                _logger.LogInformation("Creating new event: {EventName}", createEventDto.Name);
+                var createdEvent = await _eventDtoService.CreateEventAsync(createEventDto);
+                return CreatedAtAction(nameof(GetEvent), new { id = createdEvent.EventId }, createdEvent);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid event data provided");
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -124,27 +123,24 @@ namespace EventManagement.API.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var existingEvent = await _eventRepository.GetEventByIdAsync(id);
-                if (existingEvent == null)
+                _logger.LogInformation("Updating event with ID: {EventId}", id);
+                var updatedEvent = await _eventDtoService.UpdateEventAsync(id, updateEventDto);
+                
+                if (updatedEvent == null)
                 {
                     return NotFound($"Event with ID {id} not found");
                 }
 
-                // Update properties
-                existingEvent.Name = updateEventDto.Name;
-                existingEvent.Description = updateEventDto.Description;
-                existingEvent.Category = updateEventDto.Category;
-                existingEvent.EventDate = updateEventDto.EventDate;
-                existingEvent.Location = updateEventDto.Location;
-                existingEvent.MaxCapacity = updateEventDto.MaxCapacity;
-                existingEvent.TicketPrice = updateEventDto.TicketPrice;
-
-                var updatedEvent = await _eventRepository.UpdateEventAsync(existingEvent);
-                return Ok(MapToEventDto(updatedEvent));
+                return Ok(updatedEvent);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid event data provided for update");
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating event {EventId}", id);
+                _logger.LogError(ex, "Error updating event with ID: {EventId}", id);
                 return StatusCode(500, "An error occurred while updating the event");
             }
         }
@@ -154,7 +150,9 @@ namespace EventManagement.API.Controllers
         {
             try
             {
-                var success = await _eventRepository.DeleteEventAsync(id);
+                _logger.LogInformation("Deleting event with ID: {EventId}", id);
+                var success = await _eventDtoService.DeleteEventAsync(id);
+                
                 if (!success)
                 {
                     return NotFound($"Event with ID {id} not found");
@@ -164,45 +162,56 @@ namespace EventManagement.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting event {EventId}", id);
+                _logger.LogError(ex, "Error deleting event with ID: {EventId}", id);
                 return StatusCode(500, "An error occurred while deleting the event");
             }
         }
 
-        // Helper methods for mapping
-        private static EventDto MapToEventDto(Event eventItem)
+        [HttpGet("active")]
+        public async Task<ActionResult<IEnumerable<EventDto>>> GetActiveEvents()
         {
-            return new EventDto
+            try
             {
-                EventId = eventItem.EventId,
-                Name = eventItem.Name,
-                Description = eventItem.Description,
-                Category = eventItem.Category,
-                EventDate = eventItem.EventDate,
-                Location = eventItem.Location,
-                MaxCapacity = eventItem.MaxCapacity,
-                TicketPrice = eventItem.TicketPrice,
-                OrganizerUserId = eventItem.OrganizerUserId,
-                IsActive = eventItem.IsActive,
-                CreatedAt = eventItem.CreatedAt,
-                UpdatedAt = eventItem.UpdatedAt
-            };
+                _logger.LogInformation("Getting active events");
+                var events = await _eventDtoService.GetActiveEventsAsync();
+                return Ok(events);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving active events");
+                return StatusCode(500, "An error occurred while retrieving active events");
+            }
         }
 
-        private static Event MapToEvent(CreateEventDto createEventDto)
+        [HttpGet("category/{category}")]
+        public async Task<ActionResult<IEnumerable<EventDto>>> GetEventsByCategory(string category)
         {
-            return new Event
+            try
             {
-                Name = createEventDto.Name,
-                Description = createEventDto.Description,
-                Category = createEventDto.Category,
-                EventDate = createEventDto.EventDate,
-                Location = createEventDto.Location,
-                MaxCapacity = createEventDto.MaxCapacity,
-                TicketPrice = createEventDto.TicketPrice,
-                OrganizerUserId = createEventDto.OrganizerUserId,
-                IsActive = true
-            };
+                _logger.LogInformation("Getting events by category: {Category}", category);
+                var events = await _eventDtoService.GetEventsByCategoryAsync(category);
+                return Ok(events);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving events by category: {Category}", category);
+                return StatusCode(500, "An error occurred while retrieving events by category");
+            }
+        }
+
+        [HttpHead("{id}")]
+        public async Task<ActionResult> EventExists(Guid id)
+        {
+            try
+            {
+                var exists = await _eventDtoService.EventExistsAsync(id);
+                return exists ? Ok() : NotFound();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking if event exists with ID: {EventId}", id);
+                return StatusCode(500, "An error occurred while checking event existence");
+            }
         }
     }
 }

@@ -80,7 +80,23 @@ namespace EventManagement.Infrastructure.Repositories
         public async Task<Event> UpdateEventAsync(Event eventItem)
         {
             eventItem.UpdatedAt = DateTime.UtcNow;
-            _context.Events.Update(eventItem);
+            
+            // Check if entity is already being tracked
+            var trackedEntity = _context.Entry(eventItem);
+            if (trackedEntity.State == EntityState.Detached)
+            {
+                var existingEntity = await _context.Events.FindAsync(eventItem.EventId);
+                if (existingEntity != null)
+                {
+                    // Update the tracked entity's values
+                    _context.Entry(existingEntity).CurrentValues.SetValues(eventItem);
+                }
+                else
+                {
+                    _context.Events.Update(eventItem);
+                }
+            }
+            
             await _context.SaveChangesAsync();
             return eventItem;
         }

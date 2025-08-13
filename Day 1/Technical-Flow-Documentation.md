@@ -21,9 +21,15 @@
 │  │                              Port: 8080                                │ │
 │  ├─────────────────────────────────────────────────────────────────────────┤ │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │ │
-│  │  │Controllers  │  │  Services   │  │Repository   │  │   Data Access   │ │ │
-│  │  │    Layer    │  │    Layer    │  │   Layer     │  │     Layer       │ │ │
+│  │  │Controllers  │  │API Services │  │Core Services│  │   Repository    │ │ │
+│  │  │    Layer    │  │   (DTOs)    │  │ (Business)  │  │     Layer       │ │ │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────┘ │ │
+│  │        │                │                │                │            │ │
+│  │        │                │                │                ▼            │ │
+│  │        │                │                │         ┌─────────────────┐ │ │
+│  │        │                │                │         │   EF DbContext  │ │ │
+│  │        │                │                │         │   Data Access   │ │ │
+│  │        │                │                │         └─────────────────┘ │ │
 │  └─────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -34,28 +40,28 @@
 
 ### **Request Processing Flow**
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│                 │    │                 │    │                 │    │                 │
-│   HTTP Request  │───▶│  Controller     │───▶│   Service       │───▶│   Repository    │
-│                 │    │                 │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-                                ▲                        ▲                        ▲
-                                │                        │                        │
-                                │                        │                        ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│                 │    │                 │    │                 │    │                 │
-│  HTTP Response  │◀───│  DTO Mapping    │◀───│ Business Logic  │◀───│  EF DbContext   │
-│                 │    │                 │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-                                                                                 ▲
-                                                                                 │
-                                                                                 ▼
-                                                                   ┌─────────────────┐
-                                                                   │                 │
-                                                                   │   SQL Server    │
-                                                                   │   Database      │
-                                                                   │                 │
-                                                                   └─────────────────┘
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│                 │    │                 │    │                 │    │                 │    │                 │
+│   HTTP Request  │───▶│  Controller     │───▶│ API DTO Service │───▶│ Core Service    │───▶│   Repository    │
+│                 │    │                 │    │                 │    │                 │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+                                ▲                        ▲                        ▲                        ▲
+                                │                        │                        │                        │
+                                │                        │                        │                        ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│                 │    │                 │    │                 │    │                 │    │                 │
+│  HTTP Response  │◀───│  DTO Mapping    │◀───│ Entity-DTO      │◀───│ Business Logic  │◀───│  EF DbContext   │
+│                 │    │                 │    │   Conversion    │    │   Validation    │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                                                                        ▲
+                                                                                                        │
+                                                                                                        ▼
+                                                                                              ┌─────────────────┐
+                                                                                              │                 │
+                                                                                              │   SQL Server    │
+                                                                                              │   Database      │
+                                                                                              │                 │
+                                                                                              └─────────────────┘
 ```
 
 ---
@@ -83,36 +89,31 @@ Step 1: HTTP Request Reception
                               ▼
 Step 2: Controller Processing
 ┌─────────────────────────────────────────────────────────────────┐
-│ EventsController.CreateEvent(EventCreateDto createDto)          │
+│ EventsController.CreateEvent(CreateEventDto createDto)          │
 │ ├─ Model validation (DataAnnotations)                           │
 │ ├─ Authorization check (if implemented)                         │
-│ └─ Call EventService.CreateEventAsync(createDto)                │
+│ └─ Call EventDtoService.CreateEventAsync(createDto)             │
 └─────────────────────────────────────────────────────────────────┘
                               ▼
-Step 3: Service Layer Processing
+Step 3: API Service Layer Processing
 ┌─────────────────────────────────────────────────────────────────┐
-│ EventService.CreateEventAsync(EventCreateDto createDto)         │
+│ EventDtoService.CreateEventAsync(CreateEventDto createDto)      │
+│ ├─ DTO validation and mapping                                   │
+│ ├─ Convert CreateEventDto to Event entity                       │
+│ └─ Call Core EventService.CreateEventAsync(entity)              │
+└─────────────────────────────────────────────────────────────────┘
+                              ▼
+Step 4: Core Service Layer Processing  
+┌─────────────────────────────────────────────────────────────────┐
+│ EventService.CreateEventAsync(Event eventEntity)                │
 │ ├─ Business rule validation                                     │
-│ ├─ DTO to Entity mapping                                        │
-│ │  Event entity = new Event                                     │
-│ │  {                                                            │
-│ │    EventId = Guid.NewGuid(),                                  │
-│ │    Name = createDto.Name,                                     │
-│ │    Description = createDto.Description,                       │
-│ │    Category = createDto.Category,                             │
-│ │    EventDate = createDto.EventDate,                           │
-│ │    Location = createDto.Location,                             │
-│ │    MaxCapacity = createDto.MaxCapacity,                       │
-│ │    TicketPrice = createDto.TicketPrice,                       │
-│ │    OrganizerUserId = createDto.OrganizerUserId,               │
-│ │    IsActive = true,                                           │
-│ │    CreatedAt = DateTime.UtcNow,                               │
-│ │    UpdatedAt = DateTime.UtcNow                                │
-│ │  };                                                           │
+│ ├─ Event duplicate checking                                     │
+│ ├─ Set audit fields (CreatedAt, UpdatedAt)                      │
+│ ├─ Log business operations                                      │
 │ └─ Call Repository.CreateAsync(entity)                          │
 └─────────────────────────────────────────────────────────────────┘
                               ▼
-Step 4: Repository Data Access
+Step 5: Repository Data Access
 ┌─────────────────────────────────────────────────────────────────┐
 │ EventRepository.CreateAsync(Event eventEntity)                  │
 │ ├─ Add entity to DbContext                                      │
@@ -122,7 +123,7 @@ Step 4: Repository Data Access
 │ └─ Return created entity                                        │
 └─────────────────────────────────────────────────────────────────┘
                               ▼
-Step 5: Database Operations
+Step 6: Database Operations
 ┌─────────────────────────────────────────────────────────────────┐
 │ SQL Server Database Operations                                  │
 │ ├─ Begin transaction                                            │
@@ -136,10 +137,10 @@ Step 5: Database Operations
 │ └─ Commit transaction                                           │
 └─────────────────────────────────────────────────────────────────┘
                               ▼
-Step 6: Response Mapping
+Step 7: Response Mapping
 ┌─────────────────────────────────────────────────────────────────┐
 │ Entity to DTO Response Mapping                                  │
-│ EventResponseDto response = new EventResponseDto                 │
+│ EventDto response = new EventDto                                 │
 │ {                                                               │
 │   EventId = entity.EventId,                                     │
 │   Name = entity.Name,                                           │
@@ -156,7 +157,7 @@ Step 6: Response Mapping
 │ };                                                              │
 └─────────────────────────────────────────────────────────────────┘
                               ▼
-Step 7: HTTP Response
+Step 8: HTTP Response
 ┌─────────────────────────────────────────────────────────────────┐
 │ HTTP/1.1 201 Created                                            │
 │ Content-Type: application/json                                  │
@@ -190,18 +191,26 @@ Step 7: HTTP Response
 │                          Presentation Layer                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ • EventsController                                                          │
-│ • HealthController                                                          │
 │ • HTTP Request/Response handling                                            │
-│ • Model validation                                                          │
-│ • Error handling                                                            │
+│ • Model validation & routing                                                │
+│ • Error handling & status codes                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Business Logic Layer                             │
+│                           API Service Layer                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • EventDtoService (IEventDtoService)                                       │
+│ • DTO mapping and validation                                                │
+│ • API contract abstraction                                                  │
+│ • Request/Response transformations                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Core Business Layer                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ • EventService (IEventService)                                             │
 │ • Business rule validation                                                  │
-│ • DTO ↔ Entity mapping                                                      │
+│ • Entity operations & logic                                                 │
 │ • Cross-cutting concerns                                                    │
 │ • Transaction coordination                                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -212,7 +221,7 @@ Step 7: HTTP Response
 │ • EventRepository (IEventRepository)                                       │
 │ • CRUD operations                                                           │
 │ • Query optimization                                                        │
-│ • Data filtering                                                            │
+│ • Data filtering & soft delete                                              │
 │ • Async operations                                                          │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     ▼

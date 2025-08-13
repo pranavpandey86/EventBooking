@@ -1,4 +1,7 @@
+using EventManagement.API.Interfaces;
+using EventManagement.API.Services;
 using EventManagement.Core.Interfaces;
+using EventManagement.Core.Services;
 using EventManagement.Infrastructure.Data;
 using EventManagement.Infrastructure.Repositories;
 using EventManagement.API.Extensions;
@@ -15,6 +18,10 @@ builder.Services.AddDbContext<EventDbContext>(options =>
 
 // Register repositories
 builder.Services.AddScoped<IEventRepository, EventRepository>();
+
+// Register services
+builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<IEventDtoService, EventDtoService>();
 
 // Add health checks
 builder.Services.AddHealthChecks(builder.Configuration);
@@ -55,11 +62,29 @@ app.MapControllers();
 // Add health check endpoints
 app.MapHealthCheckEndpoints();
 
-// Ensure database is created
-using (var scope = app.Services.CreateScope())
+// Ensure database is created (async and non-blocking)
+_ = Task.Run(async () =>
 {
-    var context = scope.ServiceProvider.GetRequiredService<EventDbContext>();
-    context.Database.EnsureCreated();
-}
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<EventDbContext>();
+        await context.Database.EnsureCreatedAsync();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogInformation("Database initialization completed successfully");
+    }
+    catch (Exception ex)
+    {
+        var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger<Program>();
+        logger.LogError(ex, "Failed to initialize database");
+    }
+});
 
-app.Run();
+await app.RunAsync();
+
+// Make the implicit Program class available to tests
+public partial class Program 
+{ 
+    protected Program() { }
+}
