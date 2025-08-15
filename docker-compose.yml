@@ -48,6 +48,26 @@ services:
       timeout: 10s
       retries: 3
 
+  # Angular Frontend
+  frontend:
+    build:
+      context: ./src/frontend/ticket-booking-system
+      dockerfile: Dockerfile
+    container_name: ticket-booking-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      eventmanagement-api:
+        condition: service_healthy
+    networks:
+      - ticketing-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Future: TicketInventory Service (ready for when we build it)
   # ticketinventory-api:
   #   build:

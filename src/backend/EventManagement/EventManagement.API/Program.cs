@@ -31,7 +31,12 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:4200", "http://localhost:3000") // Angular + potential React dev servers
+        policy.WithOrigins(
+                "http://localhost:4200",    // Angular dev server
+                "http://localhost:3000",    // Potential React dev server
+                "http://frontend:80",       // Docker container frontend
+                "http://localhost:80"       // Docker frontend mapped port
+            )
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
