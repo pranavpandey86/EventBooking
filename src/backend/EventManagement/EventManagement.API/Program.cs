@@ -23,6 +23,15 @@ builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IEventDtoService, EventDtoService>();
 
+// Register EventSearch integration
+builder.Services.AddHttpClient<IEventSearchIntegrationService, EventSearchIntegrationService>(client =>
+{
+    var eventSearchUrl = builder.Configuration.GetValue<string>("EventSearch:BaseUrl") ?? "http://localhost:8081";
+    client.BaseAddress = new Uri(eventSearchUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("User-Agent", "EventManagement-Service/1.0");
+});
+
 // Add health checks
 builder.Services.AddHealthChecks(builder.Configuration);
 

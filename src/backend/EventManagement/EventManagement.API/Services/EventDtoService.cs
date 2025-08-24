@@ -1,5 +1,6 @@
 using EventManagement.API.DTOs;
 using EventManagement.API.Interfaces;
+using EventManagement.API.Mappers;
 using EventManagement.Core.Entities;
 using EventManagement.Core.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -9,11 +10,16 @@ namespace EventManagement.API.Services
     public class EventDtoService : IEventDtoService
     {
         private readonly IEventService _eventService;
+        private readonly IEventSearchIntegrationService _searchIntegrationService;
         private readonly ILogger<EventDtoService> _logger;
 
-        public EventDtoService(IEventService eventService, ILogger<EventDtoService> logger)
+        public EventDtoService(
+            IEventService eventService, 
+            IEventSearchIntegrationService searchIntegrationService,
+            ILogger<EventDtoService> logger)
         {
             _eventService = eventService ?? throw new ArgumentNullException(nameof(eventService));
+            _searchIntegrationService = searchIntegrationService ?? throw new ArgumentNullException(nameof(searchIntegrationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -65,8 +71,24 @@ namespace EventManagement.API.Services
 
             var eventEntity = MapToEntity(createEventDto);
             var createdEvent = await _eventService.CreateEventAsync(eventEntity);
+            var eventDto = MapToEventDto(createdEvent);
+
+            // Index the event in the search service (fire and forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var searchDto = eventDto.ToSearchIndexDto();
+                    await _searchIntegrationService.IndexEventAsync(searchDto);
+                    _logger.LogInformation("Successfully indexed event {EventId} in search service", createdEvent.EventId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to index event {EventId} in search service", createdEvent.EventId);
+                }
+            });
             
-            return MapToEventDto(createdEvent);
+            return eventDto;
         }
 
         public async Task<EventDto?> UpdateEventAsync(Guid eventId, UpdateEventDto updateEventDto)
@@ -83,14 +105,55 @@ namespace EventManagement.API.Services
             
             var updatedEvent = await _eventService.UpdateEventAsync(eventId, eventEntity);
             
-            return updatedEvent != null ? MapToEventDto(updatedEvent) : null;
+            if (updatedEvent != null)
+            {
+                var eventDto = MapToEventDto(updatedEvent);
+
+                // Update the event in the search service (fire and forget)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var searchDto = eventDto.ToSearchIndexDto();
+                        await _searchIntegrationService.UpdateEventAsync(searchDto);
+                        _logger.LogInformation("Successfully updated event {EventId} in search service", eventId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to update event {EventId} in search service", eventId);
+                    }
+                });
+
+                return eventDto;
+            }
+            
+            return null;
         }
 
         public async Task<bool> DeleteEventAsync(Guid eventId)
         {
             _logger.LogInformation("Deleting event {EventId} through DTO service", eventId);
             
-            return await _eventService.DeleteEventAsync(eventId);
+            var success = await _eventService.DeleteEventAsync(eventId);
+
+            if (success)
+            {
+                // Remove the event from the search service (fire and forget)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _searchIntegrationService.DeleteEventAsync(eventId);
+                        _logger.LogInformation("Successfully deleted event {EventId} from search service", eventId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete event {EventId} from search service", eventId);
+                    }
+                });
+            }
+
+            return success;
         }
 
         public async Task<bool> EventExistsAsync(Guid eventId)

@@ -1,0 +1,6 @@
+@EventSearch.API_HostAddress = http://localhost:5036
+
+GET {{EventSearch.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

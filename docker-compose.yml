@@ -22,6 +22,45 @@ services:
       retries: 5
       start_period: 10s
 
+  # Elasticsearch for EventSearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    container_name: ticketing-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - ticketing-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  # Redis for EventSearch caching
+  redis:
+    image: redis:7.2-alpine
+    container_name: ticketing-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ticketing-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
   # EventManagement Service
   eventmanagement-api:
     build:
@@ -32,12 +71,43 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=EventManagementDB;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=true;Encrypt=false;
+      - EventSearch__BaseUrl=http://eventsearch-api:8080
       - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
       - ASPNETCORE_LOGGING__LOGLEVEL__MICROSOFT=Warning
     ports:
       - "8080:8080"
     depends_on:
       sqlserver:
+        condition: service_healthy
+    networks:
+      - ticketing-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # EventSearch Service
+  eventsearch-api:
+    build:
+      context: ./src/backend/EventSearch
+      dockerfile: Dockerfile
+    container_name: eventsearch-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Elasticsearch=http://elasticsearch:9200
+      - ConnectionStrings__Redis=redis:6379
+      - ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT=Information
+      - ASPNETCORE_LOGGING__LOGLEVEL__MICROSOFT=Warning
+      - ASPNETCORE_LOGGING__LOGLEVEL__EVENTSEARCH=Debug
+    ports:
+      - "8081:8080"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - ticketing-network
@@ -58,6 +128,8 @@ services:
       - "4200:80"
     depends_on:
       eventmanagement-api:
+        condition: service_healthy
+      eventsearch-api:
         condition: service_healthy
     networks:
       - ticketing-network
@@ -123,4 +195,8 @@ networks:
 
 volumes:
   sqlserver_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  redis_data:
     driver: local
