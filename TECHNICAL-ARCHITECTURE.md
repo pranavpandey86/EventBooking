@@ -15,6 +15,7 @@
 - ✅ **Microservices Architecture**: Service decomposition, bounded contexts, inter-service communication
 - ✅ **Event-Driven Architecture**: Asynchronous messaging, eventual consistency, saga patterns
 - ✅ **Cloud-Native Development**: Azure services, containerization, orchestration
+- ✅ **Amazon-Style Search**: Elasticsearch + Redis for high-performance search at scale
 - ✅ **Clean Architecture**: Layered design, dependency injection, SOLID principles
 - ✅ **Domain-Driven Design**: Bounded contexts, aggregates, domain events
 - ✅ **DevOps Practices**: CI/CD, Infrastructure as Code, monitoring
@@ -23,6 +24,7 @@
 - ✅ **.NET 9 Web APIs**: ASP.NET Core, Entity Framework, async programming
 - ✅ **Angular 18**: Modern frontend development, Material UI, TypeScript
 - ✅ **Azure Cloud Services**: SQL Database, Cosmos DB, Service Bus, App Service
+- ✅ **Search Technologies**: Elasticsearch clusters, Redis caching, search optimization
 - ✅ **Container Technology**: Docker, Docker Compose, multi-stage builds
 - ✅ **Database Design**: SQL Server, NoSQL patterns, performance optimization
 - ✅ **Security**: Authentication, authorization, data protection
@@ -63,10 +65,13 @@
               │   Service    │
               └──────────────┘
                       │
-              ┌──────────────┐
-              │ Azure Service│
-              │     Bus      │
-              └──────────────┘
+        ┌─────────────┼─────────────┐
+        │             │             │
+        ▼             ▼             ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ Elasticsearch│ │ Redis Cache  │ │Azure Service │
+│Search Engine │ │& Suggestions │ │     Bus      │
+└──────────────┘ └──────────────┘ └──────────────┘
 ```
 
 ### **Technology Stack**
@@ -76,6 +81,7 @@
 | **Frontend** | Angular 18 + Material UI | Single Page Application |
 | **Backend APIs** | .NET 9 + ASP.NET Core | Microservice implementation |
 | **Databases** | Azure SQL + Cosmos DB | Polyglot persistence |
+| **Search Engine** | Elasticsearch + Redis | Amazon-style search and caching |
 | **Messaging** | Azure Service Bus | Event-driven communication |
 | **Containers** | Docker + Docker Compose | Application packaging |
 | **Cloud Platform** | Microsoft Azure | Cloud infrastructure |
@@ -136,7 +142,106 @@ GET    /health                  - Health monitoring
 
 ---
 
-### **2. TicketInventory Service** ⏳ **PLANNED**
+### **2. EventSearch Service** ⏳ **PLANNED**
+
+#### **Bounded Context**: Amazon-Style Search & Discovery
+- High-performance full-text search across all events
+- Real-time search suggestions and autocomplete
+- Faceted search with advanced filtering
+- Search analytics and performance optimization
+
+#### **Technical Architecture**:
+```
+Controllers → Search Service → Search Repository → Elasticsearch
+    ↓             ↓              ↓                    ↓
+REST API     Business Logic  Index Management    Distributed
+Autocomplete Search Scoring  Query Optimization  Search Engine
+Facets       Result Ranking  Cache Strategy      Inverted Index
+    ↓             ↓              ↓                    ↓
+Redis Cache ← Suggestions ← Hot Searches ← Performance Layer
+```
+
+#### **Technology Stack**:
+- **Primary Engine**: Elasticsearch 8.x (Amazon's choice for search)
+- **Caching Layer**: Redis for hot searches and autocomplete
+- **Integration**: Real-time indexing from EventManagement service
+- **Performance**: Sub-100ms search responses
+
+#### **Search Capabilities**:
+```
+Amazon-Style Features:
+✅ Full-text search with relevance scoring
+✅ Faceted navigation (category, price, location, date)
+✅ Autocomplete with typo tolerance
+✅ Real-time search suggestions
+✅ Advanced filtering and sorting
+✅ Search analytics and optimization
+✅ Personalized search results
+✅ Geolocation-based search
+```
+
+#### **API Endpoints**:
+```
+GET    /api/v1/search/events              - Full-text search
+GET    /api/v1/search/suggestions/{text}  - Autocomplete suggestions
+POST   /api/v1/search/advanced            - Advanced search with filters
+GET    /api/v1/search/facets/{field}      - Get facet values
+GET    /api/v1/search/trending            - Trending search terms
+POST   /api/v1/search/analytics           - Search analytics
+PUT    /api/v1/search/index/{eventId}     - Index event for search
+DELETE /api/v1/search/index/{eventId}     - Remove from search
+```
+
+#### **Elasticsearch Index Design**:
+```json
+{
+  "mappings": {
+    "properties": {
+      "eventId": {"type": "keyword"},
+      "name": {
+        "type": "text",
+        "analyzer": "standard",
+        "fields": {
+          "keyword": {"type": "keyword"},
+          "suggest": {"type": "completion"}
+        }
+      },
+      "description": {"type": "text", "analyzer": "standard"},
+      "category": {"type": "keyword"},
+      "location": {
+        "type": "text",
+        "fields": {
+          "geo": {"type": "geo_point"}
+        }
+      },
+      "ticketPrice": {"type": "float"},
+      "eventDate": {"type": "date"},
+      "searchableText": {"type": "text", "analyzer": "standard"}
+    }
+  }
+}
+```
+
+#### **Redis Caching Strategy**:
+```
+Cache Patterns:
+- Hot Searches: 15-minute TTL
+- Autocomplete: 1-hour TTL  
+- Facet Values: 30-minute TTL
+- Search Results: 5-minute TTL
+- User Search History: 24-hour TTL
+```
+
+#### **Performance Targets**:
+- **Search Response**: < 100ms (99th percentile)
+- **Autocomplete**: < 50ms (99th percentile)
+- **Index Updates**: < 1 second real-time
+- **Concurrent Searches**: 10,000+ per second
+- **Search Accuracy**: > 95% relevant results
+
+---
+
+### **3. TicketInventory Service** ⏳ **PLANNED**
 
 #### **Bounded Context**: Real-time Inventory Management
 - Ticket availability tracking
@@ -190,7 +295,7 @@ Updates       Logic            ETags        NoSQL
 
 ---
 
-### **3. PaymentProcessing Service** ⏳ **PLANNED**
+### **4. PaymentProcessing Service** ⏳ **PLANNED**
 
 #### **Bounded Context**: Financial Transaction Management
 - Payment method validation and processing
@@ -235,7 +340,7 @@ Compensation Actions:
 
 ---
 
-### **4. NotificationService** ⏳ **PLANNED**
+### **5. NotificationService** ⏳ **PLANNED**
 
 #### **Bounded Context**: Multi-channel Communication
 - Template management with personalization
@@ -277,7 +382,7 @@ UserPreferences: {
 
 ---
 
-### **5. API Gateway Service** ⏳ **PLANNED**
+### **6. API Gateway Service** ⏳ **PLANNED**
 
 #### **Bounded Context**: Cross-cutting Concerns Management
 - Request routing and load balancing
@@ -477,12 +582,32 @@ Azure Kubernetes Service:
 
 | Service | Free Limit | Usage | Cost |
 |---------|------------|-------|------|
-| App Service | 10 apps, 1GB | Host APIs | $0 |
+| App Service | 10 apps, 1GB | Host APIs + Search | $0 |
 | SQL Database | 250GB | Events + Payments | $0 |
 | Cosmos DB | 1000 RU/s | Inventory + Notifications | $0 |
+| **Elasticsearch** | Self-hosted | Docker container | $0 |
+| **Redis** | Self-hosted | Docker container | $0 |
 | Service Bus | 750 hours | Messaging | $0 |
 | Storage | 5GB | Files + Logs | $0 |
-| **Total** | | **Complete platform** | **$0/month** |
+| **Total** | | **Complete platform + Search** | **$0/month** |
+
+### **Search Technology Strategy**:
+
+#### **Phase 1: Free Development (Months 1-6)**
+- **Elasticsearch**: Single-node Docker container (perfect for learning)
+- **Redis**: Docker container for caching and suggestions
+- **Learning Value**: 90% of Amazon's search patterns at zero cost
+- **Performance**: Handles thousands of events and searches
+
+#### **Phase 2: Enhanced Search ($5-15/month)**
+- **Elasticsearch Service**: Managed cloud service for production
+- **Redis Cache**: Azure Cache for Redis (small instance)
+- **Benefits**: High availability, automated backups, monitoring
+
+#### **Phase 3: Production Scale ($20-50/month)**
+- **Elasticsearch Cluster**: Multi-node for high availability
+- **Redis Cluster**: Distributed caching for global scale
+- **Benefits**: Enterprise-grade search performance
 
 ### **Scaling Timeline**:
 - **Months 1-6**: 100% free tier development
@@ -500,6 +625,7 @@ Azure Kubernetes Service:
 - ✅ Saga pattern for distributed transactions
 - ✅ CQRS and Event Sourcing
 - ✅ Circuit breaker and resilience patterns
+- ✅ **Amazon-style search architecture**
 
 ### **Cloud-Native Skills**:
 - ✅ Azure services integration
@@ -508,6 +634,15 @@ Azure Kubernetes Service:
 - ✅ Infrastructure as Code
 - ✅ CI/CD pipeline implementation
 - ✅ Monitoring and observability
+- ✅ **High-performance search systems**
+
+### **Search Technology Mastery**:
+- ✅ **Elasticsearch**: Index design, query optimization, relevance scoring
+- ✅ **Redis Caching**: Search result caching, autocomplete suggestions
+- ✅ **Search Analytics**: Performance monitoring, search quality metrics
+- ✅ **Real-time Indexing**: Event-driven search index updates
+- ✅ **Faceted Search**: Amazon-style filtering and navigation
+- ✅ **Search Performance**: Sub-100ms response times at scale
 
 ### **Development Best Practices**:
 - ✅ Clean Architecture principles

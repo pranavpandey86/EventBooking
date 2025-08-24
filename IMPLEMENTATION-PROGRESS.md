@@ -14,12 +14,13 @@
 ```
 Phase 1: EventManagement Service     ✅ COMPLETE (Day 1)
 Phase 2: Angular Frontend + Docker   ✅ COMPLETE (Day 2)
-Phase 3: TicketInventory Service     ⏳ NEXT TARGET
-Phase 4: PaymentProcessing Service   📋 PLANNED
-Phase 5: NotificationService         📋 PLANNED
-Phase 6: API Gateway Service         📋 PLANNED
-Phase 7: Azure Deployment           📋 PLANNED
-Phase 8: Advanced Features          📋 FUTURE
+Phase 3: EventSearch Service         ⏳ NEXT TARGET (Elasticsearch + Redis)
+Phase 4: TicketInventory Service     📋 PLANNED
+Phase 5: PaymentProcessing Service   📋 PLANNED
+Phase 6: NotificationService         📋 PLANNED
+Phase 7: API Gateway Service         📋 PLANNED
+Phase 8: Azure Deployment           📋 PLANNED
+Phase 9: Advanced Features          📋 FUTURE
 ```
 
 ---
@@ -232,7 +233,74 @@ src/frontend/ticket-booking-system/
 
 ---
 
-## ⏳ **PHASE 3 NEXT**: TicketInventory Service
+## ⏳ **PHASE 3 NEXT**: EventSearch Service (Amazon-Style Search)
+**Target Date**: August 25-27, 2025  
+**Estimated Duration**: 3 Days  
+**Status**: 📋 **READY TO START**
+
+### **🎯 Planned Objectives**
+- [ ] Elasticsearch cluster setup in Docker
+- [ ] Redis caching layer for search performance
+- [ ] Amazon-style full-text search with relevance scoring
+- [ ] Real-time autocomplete and search suggestions
+- [ ] Faceted search with advanced filtering
+- [ ] Search analytics and performance monitoring
+
+### **🏗️ Technical Implementation Plan**
+
+#### **Search Architecture**:
+```
+Frontend Search → EventSearch API → Elasticsearch + Redis
+    ↓                   ↓                    ↓
+Search UI          Business Logic      Search Engine
+Autocomplete       Result Ranking      Inverted Index
+Facets             Query Optimization  Document Storage
+```
+
+#### **Key Technologies**:
+- **Elasticsearch 8.x**: Primary search engine (Amazon's choice)
+- **Redis**: Caching layer for hot searches and autocomplete
+- **Docker**: Containerized deployment for free development
+- **.NET 9**: Search API service integration
+
+#### **Amazon-Style Features to Implement**:
+- [ ] **Full-text Search**: Relevance scoring with field boosting
+- [ ] **Autocomplete**: Real-time suggestions with typo tolerance
+- [ ] **Faceted Navigation**: Category, price, location, date filters
+- [ ] **Advanced Search**: Multiple criteria with Boolean operators
+- [ ] **Search Analytics**: Query tracking and performance metrics
+- [ ] **Result Ranking**: Custom scoring based on popularity and relevance
+
+#### **API Endpoints Planned**:
+```
+GET    /api/v1/search/events              - Full-text search
+GET    /api/v1/search/suggestions/{text}  - Autocomplete
+POST   /api/v1/search/advanced            - Advanced filtering
+GET    /api/v1/search/facets/{field}      - Facet values
+GET    /api/v1/search/trending            - Popular searches
+PUT    /api/v1/search/index/{eventId}     - Index management
+```
+
+#### **Performance Targets**:
+- **Search Response**: < 100ms (Amazon standard)
+- **Autocomplete**: < 50ms (Real-time feel)
+- **Index Updates**: < 1 second (Real-time sync)
+- **Concurrent Users**: 1000+ simultaneous searches
+
+### **📋 Implementation Timeline**:
+- **Day 1**: Elasticsearch + Redis Docker setup, basic indexing
+- **Day 2**: Full-text search API, autocomplete implementation
+- **Day 3**: Faceted search, performance optimization, integration testing
+
+### **🎓 Learning Outcomes**:
+- Master Elasticsearch index design and query optimization
+- Understand Redis caching strategies for search performance
+- Learn Amazon-style search patterns and relevance scoring
+- Implement real-time search suggestions and faceted navigation
+
+---
+
+## ⏳ **PHASE 4 NEXT**: TicketInventory Service
 **Target Date**: August 25-27, 2025  
 **Estimated Duration**: 3 Days  
 **Status**: 📋 **READY TO START**
@@ -296,7 +364,7 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 
 ---
 
-## 📋 **PHASE 4 PLANNED**: PaymentProcessing Service
+## 📋 **PHASE 5 PLANNED**: PaymentProcessing Service
 **Target Date**: August 28-31, 2025  
 **Estimated Duration**: 4 Days  
 **Status**: 📋 **PLANNED**
@@ -317,7 +385,7 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 
 ---
 
-## 📋 **PHASE 5 PLANNED**: NotificationService
+## 📋 **PHASE 6 PLANNED**: NotificationService
 **Target Date**: September 1-3, 2025  
 **Estimated Duration**: 3 Days  
 **Status**: 📋 **PLANNED**
@@ -336,7 +404,7 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 
 ---
 
-## 📋 **PHASE 6 PLANNED**: API Gateway Service
+## 📋 **PHASE 7 PLANNED**: API Gateway Service
 **Target Date**: September 4-5, 2025  
 **Estimated Duration**: 2 Days  
 **Status**: 📋 **PLANNED**
@@ -353,7 +421,7 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 
 ---
 
-## 📋 **PHASE 7 PLANNED**: Azure Deployment
+## 📋 **PHASE 8 PLANNED**: Azure Deployment
 **Target Date**: September 6-8, 2025  
 **Estimated Duration**: 3 Days  
 **Status**: 📋 **PLANNED**
@@ -377,13 +445,14 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 
 ### **Completed Work**:
 ```
-✅ Services Implemented: 2/5 (40%)
+✅ Services Implemented: 2/6 (33%)
 ✅ Frontend Integration: Complete
 ✅ Database Design: Event management complete
 ✅ Container Infrastructure: Complete
 ✅ API Endpoints: 9 endpoints functional
 ✅ Testing Coverage: End-to-end validation
 ✅ Documentation: Comprehensive and up-to-date
+🎯 Next: Amazon-style search implementation
 ```
 
 ### **Code Statistics**:
@@ -404,6 +473,8 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 ✅ Frontend Integration: Angular-API integration complete
 ✅ Database Design: SQL Server schema and performance
 ✅ Cloud Preparation: Azure strategy documented
+🎯 Search Technology: Elasticsearch + Redis patterns (next)
+🎯 NoSQL Patterns: Cosmos DB implementation (planned)
 ```
 
 ---
@@ -411,20 +482,20 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 ## 🎯 Immediate Next Steps
 
 ### **This Week (August 24-27, 2025)**:
-1. **Start TicketInventory Service**: Focus on real-time concurrency patterns
-2. **Azure Cosmos DB Setup**: Learn NoSQL document database patterns
-3. **Optimistic Concurrency**: Implement ETag-based conflict resolution
-4. **SignalR Integration**: Add real-time communication capabilities
+1. **Start EventSearch Service**: Focus on Amazon-style search patterns
+2. **Elasticsearch Setup**: Learn Docker containerization and index design
+3. **Redis Integration**: Implement caching for search performance
+4. **Search API**: Build full-text search with autocomplete features
 
 ### **Next Week (August 28-31, 2025)**:
-1. **PaymentProcessing Service**: Implement Saga pattern for distributed transactions
-2. **Security Implementation**: Add authentication and authorization
-3. **Service Integration**: Connect all services with Service Bus events
+1. **TicketInventory Service**: Real-time concurrency with Cosmos DB
+2. **Search Integration**: Connect search with inventory for real-time availability
+3. **Performance Testing**: Load testing search with thousands of events
 
 ### **Following Week (September 1-7, 2025)**:
-1. **Complete Remaining Services**: NotificationService and API Gateway
-2. **Azure Deployment**: Move entire stack to cloud
-3. **Performance Testing**: Load testing and optimization
+1. **PaymentProcessing Service**: Implement Saga pattern for distributed transactions
+2. **Complete Integration**: All services working together with search
+3. **Azure Deployment**: Move entire stack including search to cloud
 
 ---
 
