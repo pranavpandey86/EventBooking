@@ -643,11 +643,18 @@ PUT    /api/v1/inventory/{eventId}/capacity  - Update capacity
 2. ✅ **Advanced Search Features**: Facets, autocomplete, similar events, popularity
 3. ✅ **Integration Layer**: Service-to-service HTTP communication  
 4. ✅ **Performance Optimization**: Sub-500ms search responses with caching
+5. ✅ **Architecture Analysis**: Identified need for event-driven communication
+
+### **Immediate Next Steps (August 25-27, 2025)**:
+1. **Event-Driven Architecture**: Replace direct HTTP calls with async messaging
+2. **Kafka Integration**: Implement Apache Kafka for service communication
+3. **Event Sourcing Patterns**: Event publishing and consumption setup
+4. **Container Orchestration**: Add Kafka + Zookeeper to Docker compose
 
 ### **Next Week (August 28-31, 2025)**:
-1. **TicketInventory Service**: Real-time concurrency with Cosmos DB
-2. **Search-Inventory Integration**: Connect search with live availability data
-3. **Performance Testing**: Load testing search + inventory for high concurrency
+1. **TicketInventory Service**: Real-time concurrency with Cosmos DB + event-driven updates
+2. **Event-Driven Integration**: All services communicating via Kafka events
+3. **Performance Testing**: Load testing async messaging with high throughput
 
 ### **Following Week (September 1-7, 2025)**:
 1. **PaymentProcessing Service**: Implement Saga pattern for distributed transactions

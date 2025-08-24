@@ -29,8 +29,14 @@ A comprehensive event management and ticket booking platform built with microser
 - 🟢 **SQL Server**: Event data storage working
 - 🟢 **Elasticsearch**: Search indexing and full-text search operational
 - 🟢 **Redis**: Distributed caching active
-- 🟡 **Integration Layer**: 95% complete (minor HttpClient config pending)
+- 🟡 **Integration Layer**: 95% complete (HTTP-based, needs event-driven refactor)
 - 🔄 **Frontend**: Angular app ready for search integration
+
+### 🎯 Immediate Next Steps
+- **Event-Driven Architecture**: Replace HTTP calls with Apache Kafka messaging
+- **Async Communication**: Implement producer/consumer patterns for service communication
+- **Container Orchestration**: Add Kafka + Zookeeper to Docker environment
+- **Performance Optimization**: Achieve non-blocking, high-throughput operations
 
 ## Architecture Overview
 
@@ -209,6 +215,7 @@ npm test
 - [Technical Architecture](TECHNICAL-ARCHITECTURE.md)
 - [Implementation Progress](IMPLEMENTATION-PROGRESS.md)
 - [Service Integration Guide](SERVICE-INTEGRATION-GUIDE.md)
+- [Event-Driven Architecture Guide](EVENT-DRIVEN-ARCHITECTURE-GUIDE.md) ⭐ **NEW**
 
 ## License
 
