@@ -1,4 +1,7 @@
+using EventSearch.Core.Interfaces;
+using EventSearch.Core.Services;
 using EventSearch.Infrastructure.Configuration;
+using EventSearch.Infrastructure.Services;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
 
@@ -9,6 +12,14 @@ builder.Services.AddControllers();
 
 // Add EventSearch Infrastructure services
 builder.Services.AddEventSearchInfrastructure(builder.Configuration);
+
+// Configure Kafka Consumer
+builder.Services.Configure<KafkaConsumerConfiguration>(
+    builder.Configuration.GetSection(KafkaConsumerConfiguration.SectionName));
+
+// Register Kafka-related services
+builder.Services.AddScoped<IEventProcessor, EventProcessor>();
+builder.Services.AddHostedService<KafkaEventConsumerService>();
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -94,4 +105,4 @@ app.MapHealthChecks("/health");
 
 app.Logger.LogInformation("EventSearch API is starting up...");
 
-app.Run();
+await app.RunAsync();

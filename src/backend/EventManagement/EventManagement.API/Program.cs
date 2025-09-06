@@ -1,3 +1,4 @@
+using EventManagement.API.Configuration;
 using EventManagement.API.Interfaces;
 using EventManagement.API.Services;
 using EventManagement.Core.Interfaces;
@@ -23,7 +24,18 @@ builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IEventDtoService, EventDtoService>();
 
-// Register EventSearch integration
+// Configure Kafka
+builder.Services.Configure<KafkaConfiguration>(
+    builder.Configuration.GetSection(KafkaConfiguration.SectionName));
+builder.Services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
+
+// Log Kafka configuration for debugging
+var kafkaConfig = builder.Configuration.GetSection(KafkaConfiguration.SectionName);
+Console.WriteLine($"Kafka BootstrapServers configured: {kafkaConfig.GetValue<string>("BootstrapServers")}");
+Console.WriteLine($"Kafka ClientId configured: {kafkaConfig.GetValue<string>("ClientId")}");
+Console.WriteLine($"Kafka EventCreated topic: {kafkaConfig.GetValue<string>("Topics:EventCreated")}");
+
+// Register EventSearch integration (keeping for backward compatibility during transition)
 builder.Services.AddHttpClient<IEventSearchIntegrationService, EventSearchIntegrationService>(client =>
 {
     var eventSearchUrl = builder.Configuration.GetValue<string>("EventSearch:BaseUrl") ?? "http://localhost:8081";

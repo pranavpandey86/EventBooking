@@ -39,6 +39,10 @@ spec:
           value: "http://elasticsearch-service:9200"
         - name: ConnectionStrings__Redis
           value: "redis-service:6379"
+        - name: KafkaConsumer__BootstrapServers
+          value: "kafka-0.kafka-headless.ticketing-system.svc.cluster.local:9092"
+        - name: KafkaConsumer__GroupId
+          value: "eventsearch-consumer-group-k8s"
         - name: ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT
           valueFrom:
             configMapKeyRef:

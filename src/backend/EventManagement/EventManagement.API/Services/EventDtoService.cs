@@ -1,4 +1,5 @@
 using EventManagement.API.DTOs;
+using EventManagement.API.Extensions;
 using EventManagement.API.Interfaces;
 using EventManagement.API.Mappers;
 using EventManagement.Core.Entities;
@@ -11,15 +12,18 @@ namespace EventManagement.API.Services
     {
         private readonly IEventService _eventService;
         private readonly IEventSearchIntegrationService _searchIntegrationService;
+        private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<EventDtoService> _logger;
 
         public EventDtoService(
             IEventService eventService, 
             IEventSearchIntegrationService searchIntegrationService,
+            IEventPublisher eventPublisher,
             ILogger<EventDtoService> logger)
         {
             _eventService = eventService ?? throw new ArgumentNullException(nameof(eventService));
             _searchIntegrationService = searchIntegrationService ?? throw new ArgumentNullException(nameof(searchIntegrationService));
+            _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -73,18 +77,39 @@ namespace EventManagement.API.Services
             var createdEvent = await _eventService.CreateEventAsync(eventEntity);
             var eventDto = MapToEventDto(createdEvent);
 
-            // Index the event in the search service (fire and forget)
+            // Publish event created message to Kafka (synchronous with proper error handling)
+            try
+            {
+                _logger.LogInformation("Publishing event-created message for event {EventId} to Kafka", createdEvent.EventId);
+                var eventMessage = eventDto.ToEventCreatedMessage();
+                var success = await _eventPublisher.PublishEventCreatedAsync(eventMessage);
+                if (success)
+                {
+                    _logger.LogInformation("Successfully published event-created message for event {EventId}", createdEvent.EventId);
+                }
+                else
+                {
+                    _logger.LogError("Failed to publish event-created message for event {EventId} - Kafka publisher returned false", createdEvent.EventId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception occurred while publishing event-created message for event {EventId}", createdEvent.EventId);
+            }
+
+            // TODO: Remove HTTP integration after confirming Kafka is working
+            // Keep HTTP integration temporarily for backward compatibility
             _ = Task.Run(async () =>
             {
                 try
                 {
                     var searchDto = eventDto.ToSearchIndexDto();
                     await _searchIntegrationService.IndexEventAsync(searchDto);
-                    _logger.LogInformation("Successfully indexed event {EventId} in search service", createdEvent.EventId);
+                    _logger.LogInformation("Successfully indexed event {EventId} in search service via HTTP", createdEvent.EventId);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to index event {EventId} in search service", createdEvent.EventId);
+                    _logger.LogWarning(ex, "Failed to index event {EventId} in search service via HTTP", createdEvent.EventId);
                 }
             });
             
@@ -109,18 +134,38 @@ namespace EventManagement.API.Services
             {
                 var eventDto = MapToEventDto(updatedEvent);
 
-                // Update the event in the search service (fire and forget)
+                // Publish event updated message to Kafka (synchronous with proper error handling)
+                try
+                {
+                    _logger.LogInformation("Publishing event-updated message for event {EventId} to Kafka", eventId);
+                    var eventMessage = eventDto.ToEventUpdatedMessage();
+                    var success = await _eventPublisher.PublishEventUpdatedAsync(eventMessage);
+                    if (success)
+                    {
+                        _logger.LogInformation("Successfully published event-updated message for event {EventId}", eventId);
+                    }
+                    else
+                    {
+                        _logger.LogError("Failed to publish event-updated message for event {EventId} - Kafka publisher returned false", eventId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Exception occurred while publishing event-updated message for event {EventId}", eventId);
+                }
+
+                // Keep HTTP integration temporarily for backward compatibility
                 _ = Task.Run(async () =>
                 {
                     try
                     {
                         var searchDto = eventDto.ToSearchIndexDto();
                         await _searchIntegrationService.UpdateEventAsync(searchDto);
-                        _logger.LogInformation("Successfully updated event {EventId} in search service", eventId);
+                        _logger.LogInformation("Successfully updated event {EventId} in search service via HTTP", eventId);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to update event {EventId} in search service", eventId);
+                        _logger.LogWarning(ex, "Failed to update event {EventId} in search service via HTTP", eventId);
                     }
                 });
 
@@ -138,17 +183,37 @@ namespace EventManagement.API.Services
 
             if (success)
             {
-                // Remove the event from the search service (fire and forget)
+                // Publish event deleted message to Kafka (synchronous with proper error handling)
+                try
+                {
+                    _logger.LogInformation("Publishing event-deleted message for event {EventId} to Kafka", eventId);
+                    var eventMessage = eventId.ToEventDeletedMessage();
+                    var kafkaSuccess = await _eventPublisher.PublishEventDeletedAsync(eventMessage);
+                    if (kafkaSuccess)
+                    {
+                        _logger.LogInformation("Successfully published event-deleted message for event {EventId}", eventId);
+                    }
+                    else
+                    {
+                        _logger.LogError("Failed to publish event-deleted message for event {EventId} - Kafka publisher returned false", eventId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Exception occurred while publishing event-deleted message for event {EventId}", eventId);
+                }
+
+                // Keep HTTP integration temporarily for backward compatibility
                 _ = Task.Run(async () =>
                 {
                     try
                     {
                         await _searchIntegrationService.DeleteEventAsync(eventId);
-                        _logger.LogInformation("Successfully deleted event {EventId} from search service", eventId);
+                        _logger.LogInformation("Successfully deleted event {EventId} from search service via HTTP", eventId);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to delete event {EventId} from search service", eventId);
+                        _logger.LogWarning(ex, "Failed to delete event {EventId} from search service via HTTP", eventId);
                     }
                 });
             }

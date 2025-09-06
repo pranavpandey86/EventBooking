@@ -38,6 +38,10 @@ spec:
               key: SQL_CONNECTION_STRING
         - name: EventSearch__BaseUrl
           value: "http://eventsearch-service"
+        - name: Kafka__BootstrapServers
+          value: "kafka-0.kafka-headless.ticketing-system.svc.cluster.local:9092"
+        - name: Kafka__ClientId
+          value: "eventmanagement-api-k8s"
         resources:
           requests:
             memory: "256Mi"
