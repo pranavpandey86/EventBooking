@@ -1,0 +1,103 @@
+# EventSearch API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventsearch-api
+  namespace: ticketing-system
+  labels:
+    app: eventsearch-api
+    component: backend
+    service: eventsearch
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eventsearch-api
+  template:
+    metadata:
+      labels:
+        app: eventsearch-api
+        component: backend
+        service: eventsearch
+    spec:
+      containers:
+      - name: eventsearch-api
+        image: ticketbookingsystem-eventsearch-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: ASPNETCORE_ENVIRONMENT
+        - name: ASPNETCORE_URLS
+          value: "http://+:8080"
+        - name: ConnectionStrings__Elasticsearch
+          value: "http://elasticsearch-service:9200"
+        - name: ConnectionStrings__Redis
+          value: "redis-service:6379"
+        - name: ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT
+        - name: ASPNETCORE_LOGGING__LOGLEVEL__MICROSOFT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: ASPNETCORE_LOGGING__LOGLEVEL__MICROSOFT
+        - name: ASPNETCORE_LOGGING__LOGLEVEL__EVENTSEARCH
+          value: "Debug"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+# EventSearch API Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventsearch-service
+  namespace: ticketing-system
+  labels:
+    app: eventsearch-api
+    service: eventsearch
+spec:
+  selector:
+    app: eventsearch-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP

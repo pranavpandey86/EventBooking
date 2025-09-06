@@ -1,0 +1,106 @@
+# SQL Server StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sqlserver
+  namespace: ticketing-system
+  labels:
+    app: sqlserver
+    component: database
+spec:
+  serviceName: sqlserver-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sqlserver
+  template:
+    metadata:
+      labels:
+        app: sqlserver
+    spec:
+      containers:
+      - name: sqlserver
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+        - containerPort: 1433
+          name: sql
+        env:
+        - name: ACCEPT_EULA
+          value: "Y"
+        - name: SA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: SA_PASSWORD
+        - name: MSSQL_PID
+          value: "Developer"
+        - name: MSSQL_COLLATION
+          value: "SQL_Latin1_General_CP1_CI_AS"
+        - name: MSSQL_MEMORY_LIMIT_MB
+          value: "2048"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: sqlserver-storage
+          mountPath: /var/opt/mssql
+        livenessProbe:
+          tcpSocket:
+            port: 1433
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 1433
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+  volumeClaimTemplates:
+  - metadata:
+      name: sqlserver-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
+---
+# SQL Server Headless Service (for StatefulSet)
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlserver-headless
+  namespace: ticketing-system
+  labels:
+    app: sqlserver
+spec:
+  selector:
+    app: sqlserver
+  ports:
+  - name: sql
+    port: 1433
+    targetPort: 1433
+  clusterIP: None
+---
+# SQL Server Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlserver-service
+  namespace: ticketing-system
+  labels:
+    app: sqlserver
+spec:
+  selector:
+    app: sqlserver
+  ports:
+  - name: sql
+    port: 1433
+    targetPort: 1433
+  type: ClusterIP

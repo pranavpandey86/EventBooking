@@ -21,7 +21,8 @@ spec:
     spec:
       containers:
       - name: eventmanagement-api
-        image: ticketingacr.azurecr.io/eventmanagement-api:latest
+        image: ticketbookingsystem-eventmanagement-api:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
           name: http
@@ -33,13 +34,10 @@ spec:
         - name: ConnectionStrings__DefaultConnection
           valueFrom:
             secretKeyRef:
-              name: sql-connection
-              key: connectionstring
-        - name: ApplicationInsights__ConnectionString
-          valueFrom:
-            secretKeyRef:
-              name: appinsights-connection
-              key: connectionstring
+              name: app-secrets
+              key: SQL_CONNECTION_STRING
+        - name: EventSearch__BaseUrl
+          value: "http://eventsearch-service"
         resources:
           requests:
             memory: "256Mi"

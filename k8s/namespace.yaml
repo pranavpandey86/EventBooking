@@ -1,0 +1,45 @@
+# Kubernetes Namespace for TicketBooking System
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ticketing-system
+  labels:
+    name: ticketing-system
+    environment: development
+    project: ticket-booking-system
+---
+# ConfigMap for common configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: ticketing-system
+data:
+  ASPNETCORE_ENVIRONMENT: "Development"
+  ASPNETCORE_LOGGING__LOGLEVEL__DEFAULT: "Information"
+  ASPNETCORE_LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+  # Database configurations
+  SQL_SERVER_HOST: "sqlserver-service"
+  SQL_SERVER_PORT: "1433"
+  SQL_SERVER_DATABASE: "EventManagementDB"
+  # Elasticsearch configuration
+  ELASTICSEARCH_HOST: "elasticsearch-service"
+  ELASTICSEARCH_PORT: "9200"
+  # Redis configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  # Service URLs
+  EVENTSEARCH_SERVICE_URL: "http://eventsearch-service"
+---
+# Secret for sensitive data
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  namespace: ticketing-system
+type: Opaque
+data:
+  # SQL Server SA password (base64 encoded: YourStrong!Passw0rd)
+  SA_PASSWORD: WW91clN0cm9uZyFQYXNzdzByZA==
+  # SQL Connection String (base64 encoded)
+  SQL_CONNECTION_STRING: U2VydmVyPXNxbHNlcnZlci1zZXJ2aWNlLDE0MzM7RGF0YWJhc2U9RXZlbnRNYW5hZ2VtZW50REI7VXNlciBJZD1zYTtQYXNzd29yZD1Zb3VyU3Ryb25nIVBhc3N3MHJkO1RydXN0U2VydmVyQ2VydGlmaWNhdGU9dHJ1ZTtFbmNyeXB0PWZhbHNlOw==
