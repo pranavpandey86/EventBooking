@@ -35,14 +35,8 @@ Console.WriteLine($"Kafka BootstrapServers configured: {kafkaConfig.GetValue<str
 Console.WriteLine($"Kafka ClientId configured: {kafkaConfig.GetValue<string>("ClientId")}");
 Console.WriteLine($"Kafka EventCreated topic: {kafkaConfig.GetValue<string>("Topics:EventCreated")}");
 
-// Register EventSearch integration (keeping for backward compatibility during transition)
-builder.Services.AddHttpClient<IEventSearchIntegrationService, EventSearchIntegrationService>(client =>
-{
-    var eventSearchUrl = builder.Configuration.GetValue<string>("EventSearch:BaseUrl") ?? "http://localhost:8081";
-    client.BaseAddress = new Uri(eventSearchUrl);
-    client.Timeout = TimeSpan.FromSeconds(30);
-    client.DefaultRequestHeaders.Add("User-Agent", "EventManagement-Service/1.0");
-});
+// HTTP integration removed - ONLY Kafka communication allowed
+// No fallback mechanisms - pure event-driven architecture
 
 // Add health checks
 builder.Services.AddHealthChecks(builder.Configuration);

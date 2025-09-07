@@ -1,0 +1,40 @@
+{
+  "properties": {
+    "category": "Cost",
+    "amount": 190,
+    "timeGrain": "Monthly",
+    "timePeriod": {
+      "startDate": "2025-09-01T00:00:00Z",
+      "endDate": "2026-12-31T23:59:59Z"
+    },
+    "filters": {
+      "resourceGroups": []
+    },
+    "notifications": {
+      "Alert150": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 75,
+        "contactEmails": ["pranav.pandey2021@gmail.com"],
+        "contactRoles": ["Owner"],
+        "thresholdType": "Actual"
+      },
+      "Alert180": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 90,
+        "contactEmails": ["pranav.pandey2021@gmail.com"],
+        "contactRoles": ["Owner"],
+        "thresholdType": "Actual"
+      },
+      "HardStop190": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 95,
+        "contactEmails": ["pranav.pandey2021@gmail.com"],
+        "contactRoles": ["Owner"],
+        "thresholdType": "Forecasted"
+      }
+    }
+  }
+}

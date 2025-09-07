@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-loadbalancer
+  namespace: ticketing-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+  sessionAffinity: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventmanagement-loadbalancer
+  namespace: ticketing-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: eventmanagement-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+  sessionAffinity: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventsearch-loadbalancer
+  namespace: ticketing-system
+spec:
+  type: LoadBalancer
+  selector:
+    app: eventsearch-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+  sessionAffinity: None

@@ -1,11 +1,3 @@
-using EventSearch.API.DTOs;
-
-namespace EventManagement.API.Interfaces;
-
-public interface IEventSearchIntegrationService
-{
-    Task<bool> IndexEventAsync(IndexEventRequestDto eventData, CancellationToken cancellationToken = default);
-    Task<bool> UpdateEventAsync(IndexEventRequestDto eventData, CancellationToken cancellationToken = default);
-    Task<bool> DeleteEventAsync(Guid eventId, CancellationToken cancellationToken = default);
-    Task<bool> IsSearchServiceHealthyAsync(CancellationToken cancellationToken = default);
-}
+// IEventSearchIntegrationService removed - PURE KAFKA ARCHITECTURE
+// No HTTP service integration - all communication via Kafka events only
+// This file is kept as a placeholder but interface is not used

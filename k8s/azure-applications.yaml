@@ -1,0 +1,203 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventmanagement-api
+  namespace: ticketing-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eventmanagement-api
+  template:
+    metadata:
+      labels:
+        app: eventmanagement-api
+    spec:
+      containers:
+      - name: eventmanagement-api
+        image: ticketingfreeacr1757240088.azurecr.io/eventmanagement-api:latest
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ASPNETCORE_URLS
+          value: "http://+:8080"
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: connection-string
+        - name: Kafka__BootstrapServers
+          value: "kafka-service:9092"
+        - name: ApplicationInsights__InstrumentationKey
+          valueFrom:
+            secretKeyRef:
+              name: appinsights-secret
+              key: instrumentation-key
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventmanagement-service
+  namespace: ticketing-system
+spec:
+  selector:
+    app: eventmanagement-api
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventsearch-api
+  namespace: ticketing-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eventsearch-api
+  template:
+    metadata:
+      labels:
+        app: eventsearch-api
+    spec:
+      containers:
+      - name: eventsearch-api
+        image: ticketingfreeacr1757240088.azurecr.io/eventsearch-api:latest
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ASPNETCORE_URLS
+          value: "http://+:8080"
+        - name: Redis__ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: connection-string
+        - name: ConnectionStrings__Elasticsearch
+          value: "http://elasticsearch-service.ticketing-system.svc.cluster.local:9200"
+        - name: ConnectionStrings__Redis
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: connection-string
+        - name: Kafka__BootstrapServers
+          value: "kafka-service:9092"
+        - name: KafkaConsumer__BootstrapServers
+          value: "kafka-service:9092"
+        - name: Kafka__GroupId
+          value: "eventsearch-consumer-group-azure"
+        - name: ApplicationInsights__InstrumentationKey
+          valueFrom:
+            secretKeyRef:
+              name: appinsights-secret
+              key: instrumentation-key
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventsearch-service
+  namespace: ticketing-system
+spec:
+  selector:
+    app: eventsearch-api
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: ticketing-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: ticketingfreeacr1757240088.azurecr.io/frontend:latest
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        ports:
+        - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: ticketing-system
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP

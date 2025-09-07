@@ -1,0 +1,257 @@
+name: Deploy to Azure AKS
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'k8s/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'k8s/**'
+
+env:
+  AZURE_CONTAINER_REGISTRY: ticketingacr
+  CONTAINER_NAME: eventmanagement-api
+  RESOURCE_GROUP: rg-ticketing-system
+  CLUSTER_NAME: ticketing-aks
+  DEPLOYMENT_MANIFEST_PATH: k8s
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '9.0.x'
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: src/frontend/ticket-booking-system/package-lock.json
+    
+    - name: Restore .NET packages
+      run: dotnet restore src/backend/EventManagement/EventManagement.sln
+    
+    - name: Build .NET projects
+      run: |
+        dotnet build src/backend/EventManagement/EventManagement.sln --configuration Release --no-restore
+        dotnet build src/backend/EventSearch/EventSearch.sln --configuration Release --no-restore
+    
+    - name: Run .NET tests
+      run: |
+        dotnet test src/backend/EventManagement/EventManagement.Tests/EventManagement.Tests.csproj --configuration Release --logger trx --collect:"XPlat Code Coverage"
+        dotnet test src/backend/EventSearch/EventSearch.Tests/EventSearch.Tests.csproj --configuration Release --logger trx --collect:"XPlat Code Coverage"
+    
+    - name: Install frontend dependencies
+      working-directory: src/frontend/ticket-booking-system
+      run: npm ci
+    
+    - name: Build frontend
+      working-directory: src/frontend/ticket-booking-system
+      run: npm run build --prod
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          **/*.trx
+          **/coverage.cobertura.xml
+
+  build-and-push-images:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Generate image tag
+      id: image-tag
+      run: echo "tag=build-${{ github.run_number }}-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Login to Azure Container Registry
+      run: az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+    
+    - name: Build and push EventManagement API
+      run: |
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventmanagement-api:${{ steps.image-tag.outputs.tag }} \
+                     -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventmanagement-api:latest \
+                     -f src/backend/EventManagement/EventManagement.API/Dockerfile \
+                     src/backend/EventManagement/
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventmanagement-api:${{ steps.image-tag.outputs.tag }}
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventmanagement-api:latest
+    
+    - name: Build and push EventSearch API
+      run: |
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventsearch-api:${{ steps.image-tag.outputs.tag }} \
+                     -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventsearch-api:latest \
+                     -f src/backend/EventSearch/EventSearch.API/Dockerfile \
+                     src/backend/EventSearch/
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventsearch-api:${{ steps.image-tag.outputs.tag }}
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventsearch-api:latest
+    
+    - name: Build and push Frontend
+      run: |
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ steps.image-tag.outputs.tag }} \
+                     -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest \
+                     -f src/frontend/ticket-booking-system/Dockerfile \
+                     src/frontend/ticket-booking-system/
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ steps.image-tag.outputs.tag }}
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:latest
+
+  deploy-to-development:
+    needs: build-and-push-images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: development
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+    
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.CLUSTER_NAME }}
+    
+    - name: Create secrets
+      run: |
+        kubectl create namespace ticketing-system-dev --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic database-secret \
+          --from-literal=connection-string="${{ secrets.SQL_CONNECTION_STRING }}" \
+          --namespace=ticketing-system-dev \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic redis-secret \
+          --from-literal=connection-string="${{ secrets.REDIS_CONNECTION_STRING }}" \
+          --namespace=ticketing-system-dev \
+          --dry-run=client -o yaml | kubectl apply -f -
+    
+    - name: Deploy to AKS Development
+      run: |
+        # Update image tags in manifests
+        sed -i "s|ticketbookingsystem-eventmanagement-api:latest|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventmanagement-api:${{ needs.build-and-push-images.outputs.image-tag }}|g" k8s/eventmanagement-deployment.yaml
+        sed -i "s|ticketbookingsystem-eventsearch-api:latest|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventsearch-api:${{ needs.build-and-push-images.outputs.image-tag }}|g" k8s/eventsearch-deployment.yaml
+        sed -i "s|ticketbookingsystem-frontend:latest|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ needs.build-and-push-images.outputs.image-tag }}|g" k8s/frontend-deployment.yaml
+        
+        # Update namespace to development
+        sed -i "s|namespace: ticketing-system|namespace: ticketing-system-dev|g" k8s/*.yaml
+        
+        # Deploy infrastructure
+        kubectl apply -f k8s/kafka-cluster.yaml
+        kubectl apply -f k8s/elasticsearch.yaml
+        
+        # Wait for infrastructure
+        kubectl wait --for=condition=ready pod -l app=kafka -n ticketing-system-dev --timeout=300s || true
+        kubectl wait --for=condition=ready pod -l app=elasticsearch -n ticketing-system-dev --timeout=300s || true
+        
+        # Deploy applications
+        kubectl apply -f k8s/eventmanagement-deployment.yaml
+        kubectl apply -f k8s/eventsearch-deployment.yaml
+        kubectl apply -f k8s/frontend-deployment.yaml
+    
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n ticketing-system-dev
+        kubectl get services -n ticketing-system-dev
+
+  deploy-to-production:
+    needs: build-and-push-images
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+    
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.CLUSTER_NAME }}
+    
+    - name: Create secrets
+      run: |
+        kubectl create namespace ticketing-system --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic database-secret \
+          --from-literal=connection-string="${{ secrets.SQL_CONNECTION_STRING }}" \
+          --namespace=ticketing-system \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic cosmos-secret \
+          --from-literal=connection-string="${{ secrets.COSMOS_CONNECTION_STRING }}" \
+          --namespace=ticketing-system \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic redis-secret \
+          --from-literal=connection-string="${{ secrets.REDIS_CONNECTION_STRING }}" \
+          --namespace=ticketing-system \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic appinsights-secret \
+          --from-literal=instrumentation-key="${{ secrets.APPINSIGHTS_INSTRUMENTATION_KEY }}" \
+          --namespace=ticketing-system \
+          --dry-run=client -o yaml | kubectl apply -f -
+    
+    - name: Deploy to AKS Production
+      run: |
+        # Update image tags in manifests
+        sed -i "s|ticketbookingsystem-eventmanagement-api:latest|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventmanagement-api:${{ needs.build-and-push-images.outputs.image-tag }}|g" k8s/eventmanagement-deployment.yaml
+        sed -i "s|ticketbookingsystem-eventsearch-api:latest|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/eventsearch-api:${{ needs.build-and-push-images.outputs.image-tag }}|g" k8s/eventsearch-deployment.yaml
+        sed -i "s|ticketbookingsystem-frontend:latest|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/frontend:${{ needs.build-and-push-images.outputs.image-tag }}|g" k8s/frontend-deployment.yaml
+        
+        # Deploy all manifests
+        kubectl apply -f k8s/
+    
+    - name: Wait for deployment
+      run: |
+        kubectl wait --for=condition=available deployment/eventmanagement-api -n ticketing-system --timeout=300s
+        kubectl wait --for=condition=available deployment/eventsearch-api -n ticketing-system --timeout=300s
+        kubectl wait --for=condition=available deployment/frontend -n ticketing-system --timeout=300s
+    
+    - name: Verify production deployment
+      run: |
+        kubectl get pods -n ticketing-system
+        kubectl get services -n ticketing-system
+        kubectl get ingress -n ticketing-system
+    
+    - name: Run smoke tests
+      run: |
+        # Get the external IP and run basic health checks
+        EXTERNAL_IP=$(kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "pending")
+        echo "External IP: $EXTERNAL_IP"
+        
+        if [ "$EXTERNAL_IP" != "pending" ] && [ "$EXTERNAL_IP" != "" ]; then
+          echo "Running smoke tests..."
+          curl -f http://$EXTERNAL_IP/api/events/health || echo "Health check failed"
+        else
+          echo "External IP not ready yet, skipping smoke tests"
+        fi

@@ -11,18 +11,15 @@ namespace EventManagement.API.Services
     public class EventDtoService : IEventDtoService
     {
         private readonly IEventService _eventService;
-        private readonly IEventSearchIntegrationService _searchIntegrationService;
         private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<EventDtoService> _logger;
 
         public EventDtoService(
             IEventService eventService, 
-            IEventSearchIntegrationService searchIntegrationService,
             IEventPublisher eventPublisher,
             ILogger<EventDtoService> logger)
         {
             _eventService = eventService ?? throw new ArgumentNullException(nameof(eventService));
-            _searchIntegrationService = searchIntegrationService ?? throw new ArgumentNullException(nameof(searchIntegrationService));
             _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -97,21 +94,8 @@ namespace EventManagement.API.Services
                 _logger.LogError(ex, "Exception occurred while publishing event-created message for event {EventId}", createdEvent.EventId);
             }
 
-            // TODO: Remove HTTP integration after confirming Kafka is working
-            // Keep HTTP integration temporarily for backward compatibility
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var searchDto = eventDto.ToSearchIndexDto();
-                    await _searchIntegrationService.IndexEventAsync(searchDto);
-                    _logger.LogInformation("Successfully indexed event {EventId} in search service via HTTP", createdEvent.EventId);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to index event {EventId} in search service via HTTP", createdEvent.EventId);
-                }
-            });
+            // PURE KAFKA IMPLEMENTATION - No HTTP fallback
+            _logger.LogInformation("Event {EventId} processing complete - Kafka-only architecture", createdEvent.EventId);
             
             return eventDto;
         }
@@ -154,20 +138,8 @@ namespace EventManagement.API.Services
                     _logger.LogError(ex, "Exception occurred while publishing event-updated message for event {EventId}", eventId);
                 }
 
-                // Keep HTTP integration temporarily for backward compatibility
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        var searchDto = eventDto.ToSearchIndexDto();
-                        await _searchIntegrationService.UpdateEventAsync(searchDto);
-                        _logger.LogInformation("Successfully updated event {EventId} in search service via HTTP", eventId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to update event {EventId} in search service via HTTP", eventId);
-                    }
-                });
+                // PURE KAFKA IMPLEMENTATION - No HTTP fallback
+                _logger.LogInformation("Event {EventId} update processing complete - Kafka-only architecture", eventId);
 
                 return eventDto;
             }
@@ -203,19 +175,8 @@ namespace EventManagement.API.Services
                     _logger.LogError(ex, "Exception occurred while publishing event-deleted message for event {EventId}", eventId);
                 }
 
-                // Keep HTTP integration temporarily for backward compatibility
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _searchIntegrationService.DeleteEventAsync(eventId);
-                        _logger.LogInformation("Successfully deleted event {EventId} from search service via HTTP", eventId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete event {EventId} from search service via HTTP", eventId);
-                    }
-                });
+                // PURE KAFKA IMPLEMENTATION - No HTTP fallback
+                _logger.LogInformation("Event {EventId} deletion processing complete - Kafka-only architecture", eventId);
             }
 
             return success;

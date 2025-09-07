@@ -1,0 +1,259 @@
+# Azure DevOps Pipeline for TicketBookingSystem
+# This pipeline builds, tests, and deploys to Azure Kubernetes Service (AKS)
+
+trigger:
+  branches:
+    include:
+    - main
+    - develop
+  paths:
+    include:
+    - src/*
+    - k8s/*
+    - docker-compose.yml
+
+pr:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - src/*
+    - k8s/*
+
+variables:
+  # Azure Resources
+  azureSubscription: 'Azure-Connection' # Service connection name
+  resourceGroupName: 'rg-ticketing-system'
+  location: 'East US'
+  
+  # Container Registry
+  containerRegistry: 'ticketingacr.azurecr.io'
+  containerRegistryServiceConnection: 'ticketing-acr-connection'
+  
+  # Kubernetes
+  kubernetesServiceConnection: 'ticketing-aks-connection'
+  kubernetesNamespace: 'ticketing-system'
+  
+  # Image names and tags
+  imageTag: '$(Build.BuildId)'
+  eventManagementImage: '$(containerRegistry)/eventmanagement-api:$(imageTag)'
+  eventSearchImage: '$(containerRegistry)/eventsearch-api:$(imageTag)'
+  frontendImage: '$(containerRegistry)/frontend:$(imageTag)'
+  
+  # Build configuration
+  buildConfiguration: 'Release'
+  dotNetVersion: '9.0.x'
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildAndTest
+    displayName: 'Build, Test, and Push Images'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - checkout: self
+      fetchDepth: 0
+    
+    # Setup .NET
+    - task: UseDotNet@2
+      displayName: 'Use .NET $(dotNetVersion)'
+      inputs:
+        packageType: 'sdk'
+        version: '$(dotNetVersion)'
+        includePreviewVersions: false
+    
+    # Restore NuGet packages
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore packages'
+      inputs:
+        command: 'restore'
+        projects: 'src/backend/**/*.csproj'
+    
+    # Build .NET projects
+    - task: DotNetCoreCLI@2
+      displayName: 'Build EventManagement'
+      inputs:
+        command: 'build'
+        projects: 'src/backend/EventManagement/EventManagement.API/EventManagement.API.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+    
+    - task: DotNetCoreCLI@2
+      displayName: 'Build EventSearch'
+      inputs:
+        command: 'build'
+        projects: 'src/backend/EventSearch/EventSearch.API/EventSearch.API.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+    
+    # Run unit tests
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Tests - EventManagement'
+      inputs:
+        command: 'test'
+        projects: 'src/backend/EventManagement/EventManagement.Tests/EventManagement.Tests.csproj'
+        arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" --logger trx'
+        publishTestResults: true
+    
+    # Setup Node.js for frontend
+    - task: NodeTool@0
+      displayName: 'Setup Node.js'
+      inputs:
+        versionSpec: '18.x'
+    
+    # Install frontend dependencies
+    - script: |
+        cd src/frontend/ticket-booking-system
+        npm ci
+      displayName: 'Install frontend dependencies'
+    
+    # Build frontend
+    - script: |
+        cd src/frontend/ticket-booking-system
+        npm run build --prod
+      displayName: 'Build frontend'
+    
+    # Build and push Docker images
+    - task: Docker@2
+      displayName: 'Build and Push EventManagement Image'
+      inputs:
+        containerRegistry: '$(containerRegistryServiceConnection)'
+        repository: 'eventmanagement-api'
+        command: 'buildAndPush'
+        Dockerfile: 'src/backend/EventManagement/EventManagement.API/Dockerfile'
+        buildContext: 'src/backend/EventManagement'
+        tags: |
+          $(imageTag)
+          latest
+    
+    - task: Docker@2
+      displayName: 'Build and Push EventSearch Image'
+      inputs:
+        containerRegistry: '$(containerRegistryServiceConnection)'
+        repository: 'eventsearch-api'
+        command: 'buildAndPush'
+        Dockerfile: 'src/backend/EventSearch/EventSearch.API/Dockerfile'
+        buildContext: 'src/backend/EventSearch'
+        tags: |
+          $(imageTag)
+          latest
+    
+    - task: Docker@2
+      displayName: 'Build and Push Frontend Image'
+      inputs:
+        containerRegistry: '$(containerRegistryServiceConnection)'
+        repository: 'frontend'
+        command: 'buildAndPush'
+        Dockerfile: 'src/frontend/ticket-booking-system/Dockerfile'
+        buildContext: 'src/frontend/ticket-booking-system'
+        tags: |
+          $(imageTag)
+          latest
+    
+    # Publish Kubernetes manifests
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish K8s manifests'
+      inputs:
+        targetPath: 'k8s'
+        artifact: 'k8s-manifests'
+
+- stage: DeployDev
+  displayName: 'Deploy to Development'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/develop'))
+  jobs:
+  - deployment: DeployToDev
+    displayName: 'Deploy to AKS Development'
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'development'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: k8s-manifests
+          
+          # Deploy infrastructure (databases, Kafka, etc.)
+          - task: KubernetesManifest@0
+            displayName: 'Deploy Infrastructure'
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+              namespace: '$(kubernetesNamespace)-dev'
+              manifests: |
+                $(Pipeline.Workspace)/k8s-manifests/namespace.yaml
+                $(Pipeline.Workspace)/k8s-manifests/sqlserver.yaml
+                $(Pipeline.Workspace)/k8s-manifests/elasticsearch.yaml
+                $(Pipeline.Workspace)/k8s-manifests/redis.yaml
+                $(Pipeline.Workspace)/k8s-manifests/kafka-cluster.yaml
+          
+          # Wait for infrastructure to be ready
+          - script: |
+              kubectl wait --for=condition=ready pod -l app=sqlserver -n $(kubernetesNamespace)-dev --timeout=300s
+              kubectl wait --for=condition=ready pod -l app=elasticsearch -n $(kubernetesNamespace)-dev --timeout=300s
+              kubectl wait --for=condition=ready pod -l app=redis -n $(kubernetesNamespace)-dev --timeout=300s
+              kubectl wait --for=condition=ready pod -l app=kafka -n $(kubernetesNamespace)-dev --timeout=300s
+            displayName: 'Wait for Infrastructure'
+          
+          # Deploy applications
+          - task: KubernetesManifest@0
+            displayName: 'Deploy Applications'
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+              namespace: '$(kubernetesNamespace)-dev'
+              manifests: |
+                $(Pipeline.Workspace)/k8s-manifests/eventmanagement-deployment.yaml
+                $(Pipeline.Workspace)/k8s-manifests/eventsearch-deployment.yaml
+                $(Pipeline.Workspace)/k8s-manifests/frontend-deployment.yaml
+              containers: |
+                $(containerRegistry)/eventmanagement-api:$(imageTag)
+                $(containerRegistry)/eventsearch-api:$(imageTag)
+                $(containerRegistry)/frontend:$(imageTag)
+
+- stage: DeployProd
+  displayName: 'Deploy to Production'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - deployment: DeployToProd
+    displayName: 'Deploy to AKS Production'
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: k8s-manifests
+          
+          # Deploy with production configurations
+          - task: KubernetesManifest@0
+            displayName: 'Deploy to Production'
+            inputs:
+              action: 'deploy'
+              kubernetesServiceConnection: '$(kubernetesServiceConnection)'
+              namespace: '$(kubernetesNamespace)'
+              manifests: |
+                $(Pipeline.Workspace)/k8s-manifests/namespace.yaml
+                $(Pipeline.Workspace)/k8s-manifests/sqlserver.yaml
+                $(Pipeline.Workspace)/k8s-manifests/elasticsearch.yaml
+                $(Pipeline.Workspace)/k8s-manifests/redis.yaml
+                $(Pipeline.Workspace)/k8s-manifests/kafka-cluster.yaml
+                $(Pipeline.Workspace)/k8s-manifests/eventmanagement-deployment.yaml
+                $(Pipeline.Workspace)/k8s-manifests/eventsearch-deployment.yaml
+                $(Pipeline.Workspace)/k8s-manifests/frontend-deployment.yaml
+              containers: |
+                $(containerRegistry)/eventmanagement-api:$(imageTag)
+                $(containerRegistry)/eventsearch-api:$(imageTag)
+                $(containerRegistry)/frontend:$(imageTag)
+          
+          # Verify deployment
+          - script: |
+              kubectl get pods -n $(kubernetesNamespace)
+              kubectl get services -n $(kubernetesNamespace)
+            displayName: 'Verify Deployment'
