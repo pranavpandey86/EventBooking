@@ -63,14 +63,23 @@ build/
 .DS_Store
 Thumbs.db
 
-# Azure
-.azure/
+# Secrets and Sensitive Data - NEVER COMMIT THESE
+.secrets/
+*.secrets
+*-secrets.yaml
+*-secrets.json
+*-config.env
+azure-config.env
+azure-production-config.env.local
+k8s-secrets.yaml
+connection-strings.*
 
-# Secrets
-secrets/
+# Azure credentials
+.azure/
 *.pfx
 *.key
 *.crt
+*.pem
 
 # Build artifacts
 publish/
